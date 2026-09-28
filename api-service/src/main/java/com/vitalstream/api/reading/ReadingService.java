@@ -39,7 +39,12 @@ public class ReadingService {
         this.topic = topic;
     }
 
-    public ReadingAccepted publish(Long deviceId, ReadingRequest req) {
+    /**
+     * @param submittedBy who sent the reading (the authenticated caller's name). Passed in explicitly by each
+     *                    entry point (REST controller, gRPC service) rather than read from a thread-local
+     *                    security context in here, so it's visible where the value comes from.
+     */
+    public ReadingAccepted publish(Long deviceId, ReadingRequest req, String submittedBy) {
         Device device = devices.findById(deviceId)
                 .orElseThrow(() -> new NotFoundException("Device " + deviceId + " not found"));
         if (device.getStatus() != DeviceStatus.ACTIVE) {
@@ -65,6 +70,7 @@ public class ReadingService {
                 .setMeasuredAt(measuredAt)
                 .setReceivedAt(now)
                 .setFirmwareVersion(device.getFirmwareVersion())
+                .setSubmittedBy(submittedBy)
                 .build();
 
         // Key = device id: every reading from one device goes to the same partition, so they stay in order.

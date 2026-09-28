@@ -47,6 +47,12 @@
       "type": ["null", "string"],
       "default": null,
       "doc": "Device firmware when the reading was taken. Added in v2; optional with a default so readers and writers on v1 keep working"
+    },
+    {
+      "name": "submittedBy",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Identity that sent the reading to the API: the preferred_username from its access token (e.g. service-account-device-simulator). Added in v3; null for events from before authentication existed"
     }
   ]
 }
