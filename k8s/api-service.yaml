@@ -1,0 +1,76 @@
+# api-service: REST on 8080 and gRPC on 9090, published on your Mac's localhost by the LoadBalancer Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-service
+  ports:
+    - name: http
+      port: 8080
+    - name: grpc
+      port: 9090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-service
+  template:
+    metadata:
+      labels:
+        app: api-service
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: api-service
+          image: vitalstream/api-service:dev
+          # Never pull: use the image built locally with docker build (Docker Desktop's cluster shares
+          # Docker's image store). A missing image fails clearly instead of trying Docker Hub.
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: grpc
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: db-credentials
+          # Spring Boot notices it's running on Kubernetes and exposes two health groups:
+          #   liveness  - "is the process working at all?"   Failing it makes Kubernetes restart the container.
+          #   readiness - "can it handle requests right now?" Failing it takes the pod out of the Service
+          #               (no traffic sent to it) without restarting it.
+          # The startup probe gives the JVM up to 3 minutes to boot before liveness checks begin.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+          # requests: what the scheduler reserves for the pod. limits: the most it may use; exceeding the
+          # memory limit gets the container killed (OOMKilled), which is why the image sizes the Java heap
+          # at 75% of it (-XX:MaxRAMPercentage=75).
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 250m
+            limits:
+              memory: 768Mi

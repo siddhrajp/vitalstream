@@ -10,18 +10,19 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.ExponentialBackOffWithMaxRetries;
 import org.springframework.kafka.support.serializer.DelegatingByTypeSerializer;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -73,8 +74,12 @@ public class KafkaErrorHandlingConfig {
      * DelegatingByTypeSerializer picks the right serializer for each value's type.
      */
     @Bean
-    public KafkaTemplate<String, Object> deadLetterKafkaTemplate(KafkaProperties kafkaProperties) {
-        Map<String, Object> config = kafkaProperties.buildProducerProperties(null);
+    public KafkaTemplate<String, Object> deadLetterKafkaTemplate(ProducerFactory<?, ?> bootProducerFactory) {
+        // Start from the settings of Spring Boot's own producer factory rather than from spring.kafka.*
+        // properties directly: Boot's factory also applies "connection details" (e.g. the address of a
+        // Testcontainers Kafka in tests). Building from the raw properties sent dead letters produced by the
+        // integration tests to the development Kafka on localhost:9092 instead of the test's broker.
+        Map<String, Object> config = new HashMap<>(bootProducerFactory.getConfigurationProperties());
 
         KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer();
         avroSerializer.configure(config, false); // false = this serializes values, not keys

@@ -1,6 +1,7 @@
 package com.vitalstream.api.reading;
 
 import com.vitalstream.api.common.ConflictException;
+import com.vitalstream.api.common.InvalidRequestException;
 import com.vitalstream.api.common.NotFoundException;
 import com.vitalstream.api.common.ServiceUnavailableException;
 import com.vitalstream.api.device.Device;
@@ -15,6 +16,7 @@ import org.springframework.kafka.KafkaException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -26,6 +28,7 @@ import java.util.concurrent.TimeoutException;
 public class ReadingService {
 
     private static final Logger log = LoggerFactory.getLogger(ReadingService.class);
+    private static final Duration MAX_CLOCK_SKEW = Duration.ofSeconds(5);
 
     private final DeviceRepository devices;
     private final KafkaTemplate<String, VitalReadingEvent> kafka;
@@ -56,6 +59,12 @@ public class ReadingService {
         // show microseconds that the event doesn't actually carry.
         Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
         Instant measuredAt = req.measuredAt() != null ? req.measuredAt().truncatedTo(ChronoUnit.MILLIS) : now;
+        // Device clocks are never exactly in sync with ours: a reading taken "just now" by a device whose clock
+        // runs a few milliseconds fast looks like it's from the future. Allow some skew; reject real nonsense.
+        if (measuredAt.isAfter(now.plus(MAX_CLOCK_SKEW))) {
+            throw new InvalidRequestException("measuredAt is more than " + MAX_CLOCK_SKEW.toSeconds()
+                    + "s in the future: " + measuredAt);
+        }
 
         // VitalReadingEvent is generated from schemas/avro/VitalReadingEvent.avsc. build() fails if a
         // field without a default is missing, so an incomplete event can't be sent.

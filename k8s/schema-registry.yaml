@@ -1,0 +1,57 @@
+# Schema Registry. Stateless (it keeps its data in Kafka's _schemas topic), so a Deployment is enough.
+apiVersion: v1
+kind: Service
+metadata:
+  name: schema-registry
+spec:
+  selector:
+    app: schema-registry
+  ports:
+    - name: http
+      port: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schema-registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: schema-registry
+  template:
+    metadata:
+      labels:
+        app: schema-registry
+    spec:
+      # Otherwise Kubernetes injects SCHEMA_REGISTRY_PORT=tcp://..., which this image rejects as a setting.
+      enableServiceLinks: false
+      containers:
+        - name: schema-registry
+          image: confluentinc/cp-schema-registry:8.3.2
+          ports:
+            - containerPort: 8081
+          env:
+            - name: SCHEMA_REGISTRY_HOST_NAME
+              value: schema-registry
+            - name: SCHEMA_REGISTRY_LISTENERS
+              value: http://0.0.0.0:8081
+            - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL
+              value: backward_transitive
+            - name: SCHEMA_REGISTRY_HEAP_OPTS
+              value: -Xms256m -Xmx256m
+          readinessProbe:
+            httpGet:
+              path: /subjects
+              port: 8081
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: 384Mi
+              cpu: 100m
+            limits:
+              memory: 512Mi

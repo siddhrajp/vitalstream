@@ -1,0 +1,91 @@
+# Keycloak in dev mode, importing the vitalstream realm from a ConfigMap built from keycloak/realm-vitalstream.json
+# (deploy.sh creates it, so the realm file stays the single source of truth).
+#
+# Two addresses, like in docker-compose:
+#   - outside the cluster: http://localhost:8180, via the LoadBalancer Service below (Docker Desktop maps it to
+#     your Mac's localhost). KC_HOSTNAME makes every token's "iss" say this.
+#   - inside the cluster: http://keycloak:8080, used by the services to fetch the public keys.
+# In-cluster address (ClusterIP: reachable only inside the cluster).
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+spec:
+  selector:
+    app: keycloak
+  ports:
+    - name: http
+      port: 8080
+---
+# Public address. Docker Desktop publishes every port of a LoadBalancer Service on your Mac's localhost, so
+# this is a separate Service with only 8180; putting 8080 here too would clash with api-service's 8080.
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-public
+spec:
+  type: LoadBalancer
+  selector:
+    app: keycloak
+  ports:
+    - name: http
+      port: 8180
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.7.4
+          args: ["start-dev", "--import-realm"]
+          ports:
+            - containerPort: 8080
+            - containerPort: 9000
+          env:
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: admin
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              value: admin
+            - name: KC_HOSTNAME
+              value: http://localhost:8180
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+          # Keycloak serves health checks on its management port 9000.
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: 9000
+            periodSeconds: 5
+            failureThreshold: 60
+          resources:
+            requests:
+              memory: 768Mi
+              cpu: 250m
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: realm
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+      volumes:
+        - name: realm
+          configMap:
+            name: keycloak-realm

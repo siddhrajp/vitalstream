@@ -1,0 +1,62 @@
+# vitals-query: the read API on 8082, published on your Mac's localhost by the LoadBalancer Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vitals-query
+spec:
+  type: LoadBalancer
+  selector:
+    app: vitals-query
+  ports:
+    - name: http
+      port: 8082
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vitals-query
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vitals-query
+  template:
+    metadata:
+      labels:
+        app: vitals-query
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: vitals-query
+          image: vitalstream/vitals-query:dev
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8082
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: db-credentials
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 250m
+            limits:
+              memory: 768Mi

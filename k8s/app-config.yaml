@@ -1,0 +1,18 @@
+# Settings shared by the three Java services, injected as environment variables (envFrom). They override
+# the localhost defaults in each service's application.yml, so the same image runs locally and in the cluster.
+# Inside the cluster, services reach each other through Service names (postgres, kafka, ...), which
+# Kubernetes' DNS resolves to the right pod.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  DB_URL: jdbc:postgresql://postgres:5432/vitalstream
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  SCHEMA_REGISTRY_URL: http://schema-registry:8081
+  # Tokens are issued (and name their issuer) as http://localhost:8180, the address clients outside the
+  # cluster use, so that's the "iss" value the services must expect...
+  KEYCLOAK_ISSUER_URI: http://localhost:8180/realms/vitalstream
+  # ...but "localhost" inside a pod is the pod itself, so the public keys are fetched via the in-cluster
+  # address. With jwk-set-uri set, Spring fetches keys from it and still checks "iss" against the issuer URI.
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/vitalstream/protocol/openid-connect/certs

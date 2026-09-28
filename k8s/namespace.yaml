@@ -1,0 +1,6 @@
+# Everything VitalStream runs in its own namespace, so it can be listed, inspected or deleted as one unit
+# (kubectl get all -n vitalstream / kubectl delete namespace vitalstream).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vitalstream
