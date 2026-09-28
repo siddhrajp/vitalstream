@@ -23,7 +23,7 @@ public class ReadingController {
      */
     @PostMapping("/api/devices/{deviceId}/readings")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public VitalReadingEvent submit(@PathVariable Long deviceId, @Valid @RequestBody ReadingRequest req) {
+    public ReadingAccepted submit(@PathVariable Long deviceId, @Valid @RequestBody ReadingRequest req) {
         return service.publish(deviceId, req);
     }
 }

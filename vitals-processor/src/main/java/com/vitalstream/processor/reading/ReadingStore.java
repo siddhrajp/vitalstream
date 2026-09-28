@@ -1,9 +1,12 @@
 package com.vitalstream.processor.reading;
 
+import com.vitalstream.events.VitalReadingEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 
 @Service
 public class ReadingStore {
@@ -23,13 +26,13 @@ public class ReadingStore {
      * same event can't be processed by two threads at once; the UNIQUE constraint is the backstop.
      */
     @Transactional
-    public void store(VitalReadingEvent event, int partition, long offset) {
-        if (readings.existsByEventId(event.eventId())) {
-            log.info("Skipping duplicate event {} ({}@{})", event.eventId(), partition, offset);
+    public void store(VitalReadingEvent event, UUID eventId, int partition, long offset) {
+        if (readings.existsByEventId(eventId)) {
+            log.info("Skipping duplicate event {} ({}@{})", eventId, partition, offset);
             return;
         }
-        readings.save(new VitalReading(event, partition, offset));
+        readings.save(new VitalReading(event, eventId, partition, offset));
         log.info("Stored {} {} for device {} (partition {}, offset {})",
-                event.metric(), event.value(), event.deviceId(), partition, offset);
+                event.getMetric(), event.getValue(), event.getDeviceId(), partition, offset);
     }
 }
