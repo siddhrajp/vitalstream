@@ -34,6 +34,11 @@ import java.util.Map;
  *  - Transient (database down, network blip): retry with growing pauses, because it will probably
  *    work in a few seconds. If it still fails after all retries, it goes to the dead-letter topic too.
  *
+ * This service uses a batch listener. A permanent failure is reported for one record
+ * (BatchListenerFailedException), so only that record is dead-lettered. A transient failure (the database
+ * down) fails the whole batch: it's retried with the backoff below, and if it still fails every record in
+ * the batch is dead-lettered and has to be replayed from the DLT.
+ *
  * Nothing is dropped silently: a dead-lettered message keeps its original key and value, plus headers
  * saying which topic/partition/offset it came from and which exception sent it there, so it can be
  * inspected and replayed later.

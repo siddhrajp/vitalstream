@@ -27,6 +27,9 @@ spring:
     locations: classpath:db/migration
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      # Apply settings from NewTopic beans (e.g. retention) to topics that already exist, not only new ones.
+      modify-topic-configs: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       # Writes the value as Avro binary, prefixed with the id of its schema in Schema Registry.

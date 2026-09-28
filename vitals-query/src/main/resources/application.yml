@@ -25,6 +25,9 @@ spring:
       group-id: vitals-query
       # First start (no committed offset yet): build the read models from the oldest event available.
       auto-offset-reset: earliest
+      # Up to this many records per batch (default 500). Bigger batches mean fewer transactions when
+      # catching up; in normal operation batches are small because events arrive a few at a time.
+      max-poll-records: 1000
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
@@ -37,6 +40,8 @@ spring:
         max.block.ms: 5000
     listener:
       concurrency: 3
+      # The @KafkaListener method receives a List of records per poll instead of one record per call.
+      type: batch
 
 vitalstream:
   kafka:
