@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: vitals-query
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/vitalstream}
+          audiences: vitalstream-api
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5433/vitalstream}
     username: ${DB_USER:vitalstream}

@@ -15,6 +15,8 @@ import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -46,7 +48,7 @@ public class IngestGrpcService extends IngestServiceGrpc.IngestServiceImplBase {
      */
     @Override
     public void sendReading(SendReadingRequest request, StreamObserver<SendReadingResponse> responseObserver) {
-        ReadingAccepted accepted = readings.publish(request.getDeviceId(), toReadingRequest(request));
+        ReadingAccepted accepted = readings.publish(request.getDeviceId(), toReadingRequest(request), callerName());
         responseObserver.onNext(SendReadingResponse.newBuilder().setEventId(accepted.eventId()).build());
         responseObserver.onCompleted();
     }
@@ -62,10 +64,14 @@ public class IngestGrpcService extends IngestServiceGrpc.IngestServiceImplBase {
      */
     @Override
     public StreamObserver<StreamReadingsRequest> streamReadings(StreamObserver<ReadingAck> acks) {
+        // Captured once, when the stream opens and the security interceptor has just authenticated the call.
+        // onNext() below runs later, once per message, possibly on other threads, so it uses this value
+        // instead of looking up the security context again.
+        String caller = callerName();
         return new StreamObserver<>() {
             @Override
             public void onNext(StreamReadingsRequest request) {
-                acks.onNext(acknowledge(request));
+                acks.onNext(acknowledge(request, caller));
             }
 
             @Override
@@ -82,11 +88,24 @@ public class IngestGrpcService extends IngestServiceGrpc.IngestServiceImplBase {
         };
     }
 
-    private ReadingAck acknowledge(StreamReadingsRequest request) {
+    /**
+     * The authenticated caller of the current gRPC call: GrpcSecurityConfig's interceptor validates the token
+     * and puts the result in Spring Security's context before the service method runs.
+     */
+    private static String callerName() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            // Can't happen while GrpcSecurityConfig requires a token for this service; fail safe if it ever does.
+            throw Status.UNAUTHENTICATED.withDescription("no authenticated caller").asRuntimeException();
+        }
+        return auth.getName();
+    }
+
+    private ReadingAck acknowledge(StreamReadingsRequest request, String caller) {
         ReadingAck.Builder ack = ReadingAck.newBuilder().setSequence(request.getSequence());
         try {
             SendReadingRequest reading = request.getReading();
-            ReadingAccepted accepted = readings.publish(reading.getDeviceId(), toReadingRequest(reading));
+            ReadingAccepted accepted = readings.publish(reading.getDeviceId(), toReadingRequest(reading), caller);
             return ack.setEventId(accepted.eventId()).build();
         } catch (RuntimeException e) {
             Status status = GrpcErrorMapping.statusFor(e);

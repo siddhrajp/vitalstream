@@ -78,6 +78,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Spring Security + JWT validation: this service accepts requests carrying a token issued by
+             Keycloak (an "OAuth2 resource server"); it never handles logins or passwords itself. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
 
         <!-- Flyway core + the PostgreSQL dialect module (split out since Flyway 10). -->
         <dependency>

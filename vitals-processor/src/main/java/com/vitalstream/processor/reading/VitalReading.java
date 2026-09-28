@@ -44,6 +44,9 @@ public class VitalReading {
     @Column(name = "firmware_version", length = 32)
     private String firmwareVersion;
 
+    @Column(name = "submitted_by")
+    private String submittedBy;
+
     @CreationTimestamp
     @Column(name = "processed_at", nullable = false, updatable = false)
     private Instant processedAt;
@@ -67,6 +70,7 @@ public class VitalReading {
         this.measuredAt = event.getMeasuredAt();
         this.receivedAt = event.getReceivedAt();
         this.firmwareVersion = event.getFirmwareVersion(); // null for events written with schema v1
+        this.submittedBy = event.getSubmittedBy();         // null for events written before schema v3
         this.kafkaPartition = kafkaPartition;
         this.kafkaOffset = kafkaOffset;
     }
@@ -80,6 +84,7 @@ public class VitalReading {
     public Instant getMeasuredAt() { return measuredAt; }
     public Instant getReceivedAt() { return receivedAt; }
     public String getFirmwareVersion() { return firmwareVersion; }
+    public String getSubmittedBy() { return submittedBy; }
     public Instant getProcessedAt() { return processedAt; }
     public Integer getKafkaPartition() { return kafkaPartition; }
     public Long getKafkaOffset() { return kafkaOffset; }
