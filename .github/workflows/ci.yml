@@ -55,6 +55,22 @@ jobs:
           path: ${{ matrix.service }}/target/surefire-reports/
           retention-days: 7
 
+  image:
+    # Builds each service's container image, so a broken Dockerfile is caught on the push that breaks it
+    # rather than at deploy time. The images aren't pushed anywhere yet.
+    name: image ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api-service, vitals-processor, vitals-query]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build --build-arg SERVICE=${{ matrix.service }} -t vitalstream/${{ matrix.service }}:ci .
+
   simulator:
     name: simulator
     runs-on: ubuntu-latest

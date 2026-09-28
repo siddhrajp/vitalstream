@@ -1,0 +1,10 @@
+# Keep the build context small and free of local build output: only the service source and schemas are needed.
+**/target
+**/.venv
+**/generated
+**/__pycache__
+.git
+.github
+.idea
+.vscode
+.DS_Store
