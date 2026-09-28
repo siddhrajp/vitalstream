@@ -1,0 +1,52 @@
+server:
+  port: 8082   # api-service 8080, vitals-processor 8081
+
+spring:
+  application:
+    name: vitals-query
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/vitalstream}
+    username: ${DB_USER:vitalstream}
+    password: ${DB_PASSWORD:vitalstream}
+    hikari:
+      connection-timeout: 3000
+  flyway:
+    # This service owns the "readmodel" schema; its migrations and history live there.
+    schemas: readmodel
+    default-schema: readmodel
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    properties:
+      schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8086}
+    consumer:
+      # A different group from vitals-processor: Kafka tracks each group's position separately,
+      # so this service receives every event too, without taking any away from the processor.
+      group-id: vitals-query
+      # First start (no committed offset yet): build the read models from the oldest event available.
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: io.confluent.kafka.serializers.KafkaAvroDeserializer
+        specific.avro.reader: true
+    producer:
+      # Used only to write failed events to this service's dead-letter topic.
+      acks: all
+      properties:
+        max.block.ms: 5000
+    listener:
+      concurrency: 3
+
+vitalstream:
+  kafka:
+    topics:
+      readings: vitals.readings.avro
+      # Separate from the processor's DLT: an event this service can't apply may be fine for the other.
+      readings-dead-letter: vitals.readings.avro.query-dlt
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,flyway
