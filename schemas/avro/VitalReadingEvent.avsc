@@ -1,0 +1,46 @@
+{
+  "type": "record",
+  "name": "VitalReadingEvent",
+  "namespace": "com.vitalstream.events",
+  "doc": "One vital-sign reading from a device, published to vitals.readings.avro. Shared by every producer and consumer; Java classes are generated from this file.",
+  "fields": [
+    {
+      "name": "eventId",
+      "type": "string",
+      "doc": "UUID, unique per event; consumers use it to skip duplicates"
+    },
+    {
+      "name": "deviceId",
+      "type": "long"
+    },
+    {
+      "name": "patientId",
+      "type": "long",
+      "doc": "Looked up at ingest so consumers don't need to query devices"
+    },
+    {
+      "name": "metric",
+      "type": {
+        "type": "enum",
+        "name": "Metric",
+        "symbols": ["UNKNOWN", "HEART_RATE", "SPO2", "BP_SYSTOLIC", "BP_DIASTOLIC", "TEMPERATURE", "GLUCOSE"],
+        "default": "UNKNOWN",
+        "doc": "If a producer adds a symbol this reader doesn't know, the reader sees UNKNOWN instead of failing"
+      }
+    },
+    {
+      "name": "value",
+      "type": "double"
+    },
+    {
+      "name": "measuredAt",
+      "type": { "type": "long", "logicalType": "timestamp-millis" },
+      "doc": "When the device took the reading"
+    },
+    {
+      "name": "receivedAt",
+      "type": { "type": "long", "logicalType": "timestamp-millis" },
+      "doc": "When the API accepted it"
+    }
+  ]
+}

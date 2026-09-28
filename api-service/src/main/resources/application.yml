@@ -16,9 +16,10 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
-      # Key and value are sent as plain strings; we turn events into JSON ourselves (Avro replaces this in Phase 3).
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # Writes the value as Avro binary, prefixed with the id of its schema in Schema Registry.
+      # On the first send it registers the schema (or finds the existing id) and caches it.
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
       # Wait for the broker to confirm the write before treating it as sent.
       acks: all
       properties:
@@ -26,11 +27,13 @@ spring:
         max.block.ms: 5000
         request.timeout.ms: 5000
         delivery.timeout.ms: 10000
+        schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8086}
 
 vitalstream:
   kafka:
     topics:
-      readings: vitals.readings
+      # A new topic: vitals.readings holds JSON messages that an Avro consumer can't read.
+      readings: vitals.readings.avro
 
 management:
   endpoints:

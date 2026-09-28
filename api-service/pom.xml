@@ -20,7 +20,18 @@
 
     <properties>
         <java.version>21</java.version>
+        <!-- Confluent 7.9.x is built on Kafka 3.9, the client version Spring Boot 3.5 uses. -->
+        <confluent.version>7.9.9</confluent.version>
+        <avro.version>1.11.5</avro.version>   <!-- the version Confluent 7.9.x is built and tested with -->
     </properties>
+
+    <!-- Confluent's serializers are published to their own Maven repository, not Maven Central. -->
+    <repositories>
+        <repository>
+            <id>confluent</id>
+            <url>https://packages.confluent.io/maven/</url>
+        </repository>
+    </repositories>
 
     <dependencies>
         <dependency>
@@ -56,6 +67,19 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- Serializes Avro objects to bytes and registers/looks up their schema in Schema Registry. -->
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+            <version>${confluent.version}</version>
+        </dependency>
+        <!-- Pin Avro to the same version as the code generator below. -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
@@ -74,6 +98,27 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <!-- Generates Java classes from the shared .avsc files at compile time, into
+                 target/generated-sources/avro. Never edit those classes; edit the .avsc and rebuild. -->
+            <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <version>${avro.version}</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirectory>${project.basedir}/../schemas/avro</sourceDirectory>
+                            <outputDirectory>${project.build.directory}/generated-sources/avro</outputDirectory>
+                            <!-- Use java.lang.String for Avro strings (default is CharSequence). -->
+                            <stringType>String</stringType>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
