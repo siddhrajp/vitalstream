@@ -23,6 +23,10 @@
         <!-- Confluent 7.9.x is built on Kafka 3.9, the client version Spring Boot 3.5 uses. -->
         <confluent.version>7.9.9</confluent.version>
         <avro.version>1.11.5</avro.version>   <!-- the version Confluent 7.9.x is built and tested with -->
+        <!-- Spring gRPC 0.12.x targets Spring Boot 3.5 (1.x requires Boot 4). It pins these two: -->
+        <spring-grpc.version>0.12.0</spring-grpc.version>
+        <grpc.version>1.76.0</grpc.version>
+        <protobuf-java.version>4.32.1</protobuf-java.version>
     </properties>
 
     <!-- Confluent's serializers are published to their own Maven repository, not Maven Central. -->
@@ -33,7 +37,31 @@
         </repository>
     </repositories>
 
+    <!-- A "BOM" (bill of materials): imports Spring gRPC's list of matching gRPC/Protobuf versions,
+         the same way the Spring Boot parent does for everything else. -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.grpc</groupId>
+                <artifactId>spring-grpc-dependencies</artifactId>
+                <version>${spring-grpc.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
+        <!-- gRPC server (Netty on its own port) that serves every BindableService bean. -->
+        <dependency>
+            <groupId>org.springframework.grpc</groupId>
+            <artifactId>spring-grpc-spring-boot-starter</artifactId>
+        </dependency>
+        <!-- Server reflection: lets tools like grpcurl discover services without the .proto file. -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-services</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -117,6 +145,34 @@
                             <!-- Use java.lang.String for Avro strings (default is CharSequence). -->
                             <stringType>String</stringType>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Runs protoc on the shared .proto files: message classes from protoc itself, and the gRPC
+                 service base class (IngestServiceGrpc) from the protoc-gen-grpc-java plugin. Both
+                 binaries are downloaded automatically, so nothing needs installing. -->
+            <plugin>
+                <groupId>io.github.ascopes</groupId>
+                <artifactId>protobuf-maven-plugin</artifactId>
+                <version>5.1.10</version>
+                <configuration>
+                    <protoc>${protobuf-java.version}</protoc>
+                    <sourceDirectories>
+                        <sourceDirectory>${project.basedir}/../schemas/proto</sourceDirectory>
+                    </sourceDirectories>
+                    <plugins>
+                        <plugin kind="binary-maven">
+                            <groupId>io.grpc</groupId>
+                            <artifactId>protoc-gen-grpc-java</artifactId>
+                            <version>${grpc.version}</version>
+                        </plugin>
+                    </plugins>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

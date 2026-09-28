@@ -1,0 +1,79 @@
+// Contract between devices (and the Python simulator) and api-service's gRPC server.
+// Java and Python code are both generated from this file.
+//
+// Compatibility rules for changing it later:
+//  - Never change or reuse a field number; clients identify fields by number, not name.
+//  - Adding a field or an RPC is safe; old clients just don't send it / call it.
+//  - To remove a field, mark its number `reserved` so it can't be reused by accident.
+syntax = "proto3";
+
+package vitalstream.ingest.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "com.vitalstream.ingest.v1";
+
+// Receives vital-sign readings from devices.
+service IngestService {
+  // Submit one reading. Returns once the reading is safely stored in Kafka.
+  // Errors: NOT_FOUND (unknown device), FAILED_PRECONDITION (device not ACTIVE),
+  // INVALID_ARGUMENT (bad request), UNAVAILABLE (Kafka down; safe to retry).
+  rpc SendReading(SendReadingRequest) returns (SendReadingResponse);
+
+  // Long-lived bidirectional stream: a device keeps one stream open, sends readings as it takes them,
+  // and gets one ReadingAck back per reading, in the same order. A bad reading is reported in its ack
+  // and the stream carries on; the stream itself only ends with an error if something fails for the
+  // whole connection (server shutting down, network loss).
+  rpc StreamReadings(stream StreamReadingsRequest) returns (stream ReadingAck);
+}
+
+// Proto3 enums must start at 0, and 0 is what an unset field reads as,
+// so 0 means "not set" rather than a real metric.
+enum Metric {
+  METRIC_UNSPECIFIED = 0;
+  METRIC_HEART_RATE = 1;     // beats per minute
+  METRIC_SPO2 = 2;           // percent
+  METRIC_BP_SYSTOLIC = 3;    // mmHg
+  METRIC_BP_DIASTOLIC = 4;   // mmHg
+  METRIC_TEMPERATURE = 5;    // degrees Celsius
+  METRIC_GLUCOSE = 6;        // mg/dL
+}
+
+message SendReadingRequest {
+  int64 device_id = 1;
+  Metric metric = 2;
+  double value = 3;
+  // When the device took the reading. Optional: the server uses its own clock if unset.
+  google.protobuf.Timestamp measured_at = 4;
+  // Optional UUID chosen by the device, used as the event id. Send the same reading_id when retrying
+  // a reading whose outcome is unknown: the reading is then stored once however often it arrives.
+  // If unset, the server generates an id (and a retry would be stored as a separate reading).
+  string reading_id = 5;
+}
+
+message SendReadingResponse {
+  // Id of the event published to Kafka.
+  string event_id = 1;
+}
+
+message StreamReadingsRequest {
+  // Chosen by the client (e.g. 1, 2, 3...) and echoed in the ack, so the client can match acks to readings.
+  uint64 sequence = 1;
+  SendReadingRequest reading = 2;
+}
+
+message ReadingAck {
+  uint64 sequence = 1;
+  // Exactly one of these is set: "oneof" is proto's way of saying "either/or".
+  oneof result {
+    string event_id = 2;     // accepted and stored in Kafka
+    ReadingError error = 3;  // rejected; the stream stays open
+  }
+}
+
+message ReadingError {
+  // A gRPC status code name, e.g. "NOT_FOUND", "INVALID_ARGUMENT", "UNAVAILABLE" (retryable).
+  string code = 1;
+  string message = 2;
+}

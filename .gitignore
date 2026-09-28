@@ -3,3 +3,8 @@
 .vscode/
 *.iml
 .env
+
+# Python simulator
+simulator/.venv/
+simulator/generated/
+__pycache__/
