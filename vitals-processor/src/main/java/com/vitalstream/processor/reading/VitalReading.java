@@ -1,5 +1,6 @@
 package com.vitalstream.processor.reading;
 
+import com.vitalstream.events.VitalReadingEvent;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -54,14 +55,14 @@ public class VitalReading {
         // required by JPA
     }
 
-    public VitalReading(VitalReadingEvent event, int kafkaPartition, long kafkaOffset) {
-        this.eventId = event.eventId();
-        this.deviceId = event.deviceId();
-        this.patientId = event.patientId();
-        this.metric = event.metric();
-        this.value = event.value();
-        this.measuredAt = event.measuredAt();
-        this.receivedAt = event.receivedAt();
+    public VitalReading(VitalReadingEvent event, UUID eventId, int kafkaPartition, long kafkaOffset) {
+        this.eventId = eventId;
+        this.deviceId = event.getDeviceId();
+        this.patientId = event.getPatientId();
+        this.metric = event.getMetric().name();
+        this.value = event.getValue();
+        this.measuredAt = event.getMeasuredAt();
+        this.receivedAt = event.getReceivedAt();
         this.kafkaPartition = kafkaPartition;
         this.kafkaOffset = kafkaOffset;
     }
