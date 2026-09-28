@@ -18,7 +18,7 @@ Java/Spring Boot, Kafka, Avro, gRPC, PostgreSQL/Flyway, CQRS, and Keycloak.
 1. Spring Boot REST + PostgreSQL + Flyway + JPA  (done)
 2. Kafka producer/consumer  (done)
 3. Avro + Schema Registry  (done)
-4. gRPC ingest + Python simulator  <- current
-5. CQRS read models + query tuning
+4. gRPC ingest + Python simulator  (done)
+5. CQRS read models + query tuning  <- current
 6. Keycloak OIDC/JWT + role-based access
 7. CI (GitHub Actions + Testcontainers) + Kubernetes

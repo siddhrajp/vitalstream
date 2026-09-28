@@ -2,6 +2,9 @@ services:
   postgres:
     image: postgres:16
     container_name: vitalstream-postgres
+    # Docker's default /dev/shm is 64 MB; Postgres uses it for parallel queries and parallel VACUUM, which
+    # fail with "could not resize shared memory segment" on tables of a few million rows.
+    shm_size: 256mb
     environment:
       POSTGRES_DB: vitalstream
       POSTGRES_USER: vitalstream
