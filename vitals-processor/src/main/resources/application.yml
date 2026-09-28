@@ -1,0 +1,59 @@
+server:
+  port: 8081   # api-service uses 8080
+
+spring:
+  application:
+    name: vitals-processor
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/vitalstream}
+    username: ${DB_USER:vitalstream}
+    password: ${DB_PASSWORD:vitalstream}
+    hikari:
+      # Give up on a connection after 3s instead of the 30s default, so each retry attempt
+      # during a database outage fails quickly and the backoff schedule stays predictable.
+      connection-timeout: 3000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: vitals
+  flyway:
+    # This service owns the "vitals" schema. Flyway creates it on first run and keeps its own
+    # history table there, separate from api-service's history in the "public" schema.
+    schemas: vitals
+    default-schema: vitals
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # Consumers with the same group-id share the partitions of a topic between them.
+      group-id: vitals-processor
+      # Only used when this group has no committed offset yet (first run): start from the oldest message.
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      # Used only to write failed messages to the dead-letter topic.
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        # If the dead-letter topic can't be written, fail in 5s (and retry the record) instead of blocking 60s.
+        max.block.ms: 5000
+    listener:
+      # Three listener threads, one per partition of vitals.readings.
+      concurrency: 3
+
+vitalstream:
+  kafka:
+    topics:
+      readings: vitals.readings
+      readings-dead-letter: vitals.readings.dlt
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,flyway

@@ -15,8 +15,8 @@ Java/Spring Boot, Kafka, Avro, gRPC, PostgreSQL/Flyway, CQRS, and Keycloak.
 - Python for the device simulator
 
 ## Phases
-1. Spring Boot REST + PostgreSQL + Flyway + JPA  <- current
-2. Kafka producer/consumer
+1. Spring Boot REST + PostgreSQL + Flyway + JPA  (done)
+2. Kafka producer/consumer  <- current
 3. Avro + Schema Registry
 4. gRPC ingest + Python simulator
 5. CQRS read models + query tuning

@@ -3,8 +3,6 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- The Spring Boot parent pins compatible versions for every Spring/3rd-party dependency,
-         so the dependencies below don't need explicit <version> tags. -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -13,10 +11,10 @@
     </parent>
 
     <groupId>com.vitalstream</groupId>
-    <artifactId>api-service</artifactId>
+    <artifactId>vitals-processor</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>api-service</name>
-    <description>VitalStream REST API for patients and devices</description>
+    <name>vitals-processor</name>
+    <description>Consumes vital readings from Kafka and stores them in PostgreSQL</description>
 
     <properties>
         <java.version>21</java.version>
@@ -24,23 +22,24 @@
 
     <dependencies>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
+
+        <!-- No REST API here; web is only so Actuator can serve /actuator/health over HTTP. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- Flyway core + the PostgreSQL dialect module (split out since Flyway 10). -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -49,13 +48,6 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
-
-        <!-- Spring's Kafka integration: KafkaTemplate for producing, @KafkaListener for consuming. -->
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
-        </dependency>
-
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
