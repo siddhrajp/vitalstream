@@ -20,6 +20,12 @@ service IngestService {
   // Errors: NOT_FOUND (unknown device), FAILED_PRECONDITION (device not ACTIVE),
   // INVALID_ARGUMENT (bad request), UNAVAILABLE (Kafka down; safe to retry).
   rpc SendReading(SendReadingRequest) returns (SendReadingResponse);
+
+  // Long-lived bidirectional stream: a device keeps one stream open, sends readings as it takes them,
+  // and gets one ReadingAck back per reading, in the same order. A bad reading is reported in its ack
+  // and the stream carries on; the stream itself only ends with an error if something fails for the
+  // whole connection (server shutting down, network loss).
+  rpc StreamReadings(stream StreamReadingsRequest) returns (stream ReadingAck);
 }
 
 // Proto3 enums must start at 0, and 0 is what an unset field reads as,
@@ -45,4 +51,25 @@ message SendReadingRequest {
 message SendReadingResponse {
   // Id of the event published to Kafka.
   string event_id = 1;
+}
+
+message StreamReadingsRequest {
+  // Chosen by the client (e.g. 1, 2, 3...) and echoed in the ack, so the client can match acks to readings.
+  uint64 sequence = 1;
+  SendReadingRequest reading = 2;
+}
+
+message ReadingAck {
+  uint64 sequence = 1;
+  // Exactly one of these is set: "oneof" is proto's way of saying "either/or".
+  oneof result {
+    string event_id = 2;     // accepted and stored in Kafka
+    ReadingError error = 3;  // rejected; the stream stays open
+  }
+}
+
+message ReadingError {
+  // A gRPC status code name, e.g. "NOT_FOUND", "INVALID_ARGUMENT", "UNAVAILABLE" (retryable).
+  string code = 1;
+  string message = 2;
 }

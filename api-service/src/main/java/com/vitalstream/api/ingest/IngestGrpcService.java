@@ -6,10 +6,15 @@ import com.vitalstream.api.reading.ReadingAccepted;
 import com.vitalstream.api.reading.ReadingRequest;
 import com.vitalstream.api.reading.ReadingService;
 import com.vitalstream.ingest.v1.IngestServiceGrpc;
+import com.vitalstream.ingest.v1.ReadingAck;
+import com.vitalstream.ingest.v1.ReadingError;
 import com.vitalstream.ingest.v1.SendReadingRequest;
 import com.vitalstream.ingest.v1.SendReadingResponse;
+import com.vitalstream.ingest.v1.StreamReadingsRequest;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -24,6 +29,7 @@ import java.time.Instant;
 @Service
 public class IngestGrpcService extends IngestServiceGrpc.IngestServiceImplBase {
 
+    private static final Logger log = LoggerFactory.getLogger(IngestGrpcService.class);
     private static final String METRIC_PREFIX = "METRIC_";
 
     private final ReadingService readings;
@@ -42,6 +48,56 @@ public class IngestGrpcService extends IngestServiceGrpc.IngestServiceImplBase {
         ReadingAccepted accepted = readings.publish(request.getDeviceId(), toReadingRequest(request));
         responseObserver.onNext(SendReadingResponse.newBuilder().setEventId(accepted.eventId()).build());
         responseObserver.onCompleted();
+    }
+
+    /**
+     * Bidirectional streaming. Instead of handling one request, this returns a StreamObserver that gRPC
+     * calls for every message the client sends, and writes acks to `acks` as it goes. gRPC delivers one
+     * stream's messages one at a time, in order, so acks come back in the order readings were sent.
+     *
+     * Each reading is handled independently: a failure becomes an error ack and the stream stays open.
+     * If the client sends faster than readings can be published, HTTP/2 flow control makes the client's
+     * sends wait ("backpressure") rather than letting messages pile up in memory here.
+     */
+    @Override
+    public StreamObserver<StreamReadingsRequest> streamReadings(StreamObserver<ReadingAck> acks) {
+        return new StreamObserver<>() {
+            @Override
+            public void onNext(StreamReadingsRequest request) {
+                acks.onNext(acknowledge(request));
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                // The client cancelled or the connection dropped; there's no one left to answer.
+                log.debug("Reading stream ended by client: {}", Status.fromThrowable(t));
+            }
+
+            @Override
+            public void onCompleted() {
+                // The client has finished sending; finish our side too.
+                acks.onCompleted();
+            }
+        };
+    }
+
+    private ReadingAck acknowledge(StreamReadingsRequest request) {
+        ReadingAck.Builder ack = ReadingAck.newBuilder().setSequence(request.getSequence());
+        try {
+            SendReadingRequest reading = request.getReading();
+            ReadingAccepted accepted = readings.publish(reading.getDeviceId(), toReadingRequest(reading));
+            return ack.setEventId(accepted.eventId()).build();
+        } catch (RuntimeException e) {
+            Status status = GrpcErrorMapping.statusFor(e);
+            if (status == null) {
+                log.error("Unexpected error handling reading {}", request.getSequence(), e);
+                status = Status.INTERNAL.withDescription("internal error");
+            }
+            return ack.setError(ReadingError.newBuilder()
+                    .setCode(status.getCode().name())
+                    .setMessage(status.getDescription() == null ? "" : status.getDescription()))
+                    .build();
+        }
     }
 
     /**

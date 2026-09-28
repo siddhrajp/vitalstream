@@ -73,7 +73,7 @@ public class ReadingService {
             RecordMetadata meta = kafka.send(topic, key, event)
                     .get(15, TimeUnit.SECONDS)
                     .getRecordMetadata();
-            log.info("Published reading {} for device {} to {}-{} at offset {}",
+            log.debug("Published reading {} for device {} to {}-{} at offset {}",
                     event.getEventId(), deviceId, meta.topic(), meta.partition(), meta.offset());
             return ReadingAccepted.from(event);
         } catch (InterruptedException e) {

@@ -5,6 +5,7 @@ import com.vitalstream.api.common.NotFoundException;
 import com.vitalstream.api.common.ServiceUnavailableException;
 import io.grpc.Status;
 import io.grpc.StatusException;
+import io.grpc.StatusRuntimeException;
 import org.springframework.grpc.server.exception.GrpcExceptionHandler;
 import org.springframework.stereotype.Component;
 
@@ -21,14 +22,25 @@ import org.springframework.stereotype.Component;
 @Component
 public class GrpcErrorMapping implements GrpcExceptionHandler {
 
+    /** Used for unary calls: Spring gRPC calls this when a service method throws. */
     @Override
     public StatusException handleException(Throwable exception) {
-        Status status = switch (exception) {
-            case NotFoundException e -> Status.NOT_FOUND;
-            case ConflictException e -> Status.FAILED_PRECONDITION;
-            case ServiceUnavailableException e -> Status.UNAVAILABLE;
+        Status status = statusFor(exception);
+        return status == null ? null : status.asException();
+    }
+
+    /**
+     * Shared with the streaming RPC, which reports errors per reading inside ReadingAck instead of
+     * failing the whole stream. Returns null for unexpected exceptions (bugs), which callers must not
+     * describe to the client.
+     */
+    static Status statusFor(Throwable exception) {
+        return switch (exception) {
+            case StatusRuntimeException e -> e.getStatus();   // already a gRPC status (validation errors)
+            case NotFoundException e -> Status.NOT_FOUND.withDescription(e.getMessage());
+            case ConflictException e -> Status.FAILED_PRECONDITION.withDescription(e.getMessage());
+            case ServiceUnavailableException e -> Status.UNAVAILABLE.withDescription(e.getMessage());
             default -> null;
         };
-        return status == null ? null : status.withDescription(exception.getMessage()).asException();
     }
 }

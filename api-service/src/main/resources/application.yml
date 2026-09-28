@@ -4,6 +4,10 @@ spring:
   grpc:
     server:
       port: 9090   # gRPC for devices; REST stays on 8080
+      # On shutdown, stop accepting new calls, give open calls this long to finish, then cancel them.
+      # Device streams never "finish" on their own, so without a limit a stopping server would keep
+      # serving them indefinitely and a new version couldn't take over. Cancelled clients reconnect.
+      shutdown-grace-period: 5s
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5433/vitalstream}
     username: ${DB_USER:vitalstream}
