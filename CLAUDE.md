@@ -17,8 +17,8 @@ Java/Spring Boot, Kafka, Avro, gRPC, PostgreSQL/Flyway, CQRS, and Keycloak.
 ## Phases
 1. Spring Boot REST + PostgreSQL + Flyway + JPA  (done)
 2. Kafka producer/consumer  (done)
-3. Avro + Schema Registry  <- current
-4. gRPC ingest + Python simulator
+3. Avro + Schema Registry  (done)
+4. gRPC ingest + Python simulator  <- current
 5. CQRS read models + query tuning
 6. Keycloak OIDC/JWT + role-based access
 7. CI (GitHub Actions + Testcontainers) + Kubernetes

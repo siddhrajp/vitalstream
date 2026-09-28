@@ -1,6 +1,9 @@
 spring:
   application:
     name: api-service
+  grpc:
+    server:
+      port: 9090   # gRPC for devices; REST stays on 8080
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5433/vitalstream}
     username: ${DB_USER:vitalstream}
