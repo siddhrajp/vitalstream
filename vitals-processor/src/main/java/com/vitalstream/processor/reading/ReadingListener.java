@@ -20,7 +20,7 @@ public class ReadingListener {
     /**
      * Spring runs a loop per listener thread: poll Kafka for a batch of records, call this method once per
      * record, then commit the offsets of the batch. If this method throws, the offset is not committed and
-     * Spring's error handler decides what to do (by default: retry the record 9 more times, then log and skip it).
+     * the error handler in KafkaErrorHandlingConfig decides whether to retry or dead-letter the record.
      */
     @KafkaListener(topics = "${vitalstream.kafka.topics.readings}")
     public void onReading(ConsumerRecord<String, String> record) {
