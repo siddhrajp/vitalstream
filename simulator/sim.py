@@ -21,6 +21,13 @@ Reliability (turn off with --no-retry / --no-keepalive to see the difference):
   - Unary mode: gRPC's built-in retry policy retries UNAVAILABLE with exponential backoff.
   - Keepalive pings detect a connection that silently stopped responding (hung server, network cut)
     instead of waiting on it forever.
+
+Authentication (Keycloak, see keycloak/README.md): the simulator uses two identities.
+  - Setup over REST (--create, looking up devices) is admin work: it logs in as an admin user
+    (--admin-user/--admin-password, password grant).
+  - Sending readings over gRPC is device work: it logs in as the device-simulator client
+    (--client-id/--client-secret, client credentials grant) and sends that token with every call.
+  The defaults are the local dev credentials from keycloak/realm-vitalstream.json.
 """
 
 import argparse
@@ -32,8 +39,10 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
+import collections
 from collections import Counter, deque
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -64,20 +73,83 @@ RETRY_SERVICE_CONFIG = json.dumps({
 })
 
 
+# ---------- access tokens from Keycloak ----------
+
+class TokenSource:
+    """Gets access tokens from Keycloak's token endpoint and reuses each one until shortly before it expires,
+    so there's one token request every few minutes rather than one per reading. Thread-safe: all device
+    threads share one TokenSource."""
+
+    REFRESH_MARGIN_S = 30   # fetch a new token when the current one has less than this left
+
+    def __init__(self, token_url: str, form: dict[str, str]):
+        self.token_url = token_url
+        self.form = form
+        self.lock = threading.Lock()
+        self.token = None
+        self.expires_at = 0.0
+        self.fetches = 0
+
+    def get(self) -> str:
+        with self.lock:
+            if self.token is None or time.time() > self.expires_at - self.REFRESH_MARGIN_S:
+                data = urllib.parse.urlencode(self.form).encode()
+                with urllib.request.urlopen(urllib.request.Request(self.token_url, data=data), timeout=5) as resp:
+                    body = json.loads(resp.read())
+                self.token = body["access_token"]
+                self.expires_at = time.time() + body["expires_in"]
+                self.fetches += 1
+            return self.token
+
+    def metadata(self) -> tuple[tuple[str, str], ...]:
+        """gRPC call metadata (the gRPC equivalent of HTTP headers) carrying the token."""
+        return (("authorization", f"Bearer {self.get()}"),)
+
+
+class _CallDetails(collections.namedtuple(
+        "_CallDetails", ("method", "timeout", "metadata", "credentials", "wait_for_ready", "compression")),
+        grpc.ClientCallDetails):
+    pass
+
+
+class BearerTokenInterceptor(grpc.UnaryUnaryClientInterceptor, grpc.StreamStreamClientInterceptor):
+    """Adds the current access token to every call made through the channel: the client-side counterpart
+    of the server's security interceptor, so the code making calls doesn't deal with tokens at all.
+
+    The server checks the token when a call starts. A unary call is short, so that's all there is to it.
+    A stream can stay open far longer than the token's 5-minute lifetime and keeps working after the
+    token expires; it only needs a fresh token when it reconnects (which this interceptor provides)."""
+
+    def __init__(self, tokens: TokenSource):
+        self.tokens = tokens
+
+    def _with_token(self, details):
+        return _CallDetails(details.method, details.timeout,
+                            list(details.metadata or []) + list(self.tokens.metadata()),
+                            details.credentials, getattr(details, "wait_for_ready", None),
+                            getattr(details, "compression", None))
+
+    def intercept_unary_unary(self, continuation, client_call_details, request):
+        return continuation(self._with_token(client_call_details), request)
+
+    def intercept_stream_stream(self, continuation, client_call_details, request_iterator):
+        return continuation(self._with_token(client_call_details), request_iterator)
+
+
 # ---------- REST helpers (device registration lives in the REST API, not in gRPC) ----------
 
-def rest(api: str, method: str, path: str, body: dict | None = None) -> dict:
+def rest(api: str, method: str, path: str, token: str, body: dict | None = None) -> dict:
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(api + path, data=data, method=method,
-                                 headers={"Content-Type": "application/json"})
+                                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"})
     with urllib.request.urlopen(req, timeout=5) as resp:
         return json.loads(resp.read())
 
 
-def create_devices(api: str, count: int, rng: random.Random) -> list[dict]:
+def create_devices(api: str, token: str, count: int, rng: random.Random) -> list[dict]:
     """Create one simulated patient and `count` devices of assorted types for them."""
     tag = uuid.uuid4().hex[:8]
-    patient = rest(api, "POST", "/api/patients", {
+    patient = rest(api, "POST", "/api/patients", token, {
         "mrn": f"SIM-{tag}",
         "firstName": "Sim",
         "lastName": f"Patient-{tag}",
@@ -87,7 +159,7 @@ def create_devices(api: str, count: int, rng: random.Random) -> list[dict]:
     devices = []
     for i in range(count):
         device_type = types[i % len(types)]
-        devices.append(rest(api, "POST", "/api/devices", {
+        devices.append(rest(api, "POST", "/api/devices", token, {
             "serialNumber": f"SIM-{tag}-{i}",
             "deviceType": device_type,
             "firmwareVersion": "sim-1.0",
@@ -255,6 +327,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--grpc", default="localhost:9090", help="api-service gRPC address")
     parser.add_argument("--api", default="http://localhost:8080", help="api-service REST address")
+    parser.add_argument("--keycloak", default="http://localhost:8180/realms/vitalstream",
+                        help="Keycloak realm URL (the token issuer)")
+    parser.add_argument("--client-id", default="device-simulator", help="client id used to send readings")
+    parser.add_argument("--client-secret", default="device-simulator-secret", help="that client's secret")
+    parser.add_argument("--admin-user", default="bob", help="admin user for REST setup (--create, device lookup)")
+    parser.add_argument("--admin-password", default="bob", help="that user's password")
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--devices", help="comma-separated ids of existing devices, e.g. 4,6")
     source.add_argument("--create", type=int, metavar="N", help="register N new devices first")
@@ -272,15 +350,22 @@ def main():
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
+    token_url = f"{args.keycloak}/protocol/openid-connect/token"
+    admin_tokens = TokenSource(token_url, {"grant_type": "password", "client_id": "vitalstream-cli",
+                                           "username": args.admin_user, "password": args.admin_password})
+    device_tokens = TokenSource(token_url, {"grant_type": "client_credentials", "client_id": args.client_id,
+                                            "client_secret": args.client_secret})
     try:
         if args.create:
-            devices = create_devices(args.api, args.create, rng)
+            devices = create_devices(args.api, admin_tokens.get(), args.create, rng)
         else:
-            devices = [rest(args.api, "GET", f"/api/devices/{int(i)}") for i in args.devices.split(",")]
-    except urllib.error.HTTPError as e:  # the API answered, but with an error (e.g. 404 unknown device)
-        sys.exit(f"REST API error {e.code} for {e.url}: {e.read().decode()[:200]}")
+            devices = [rest(args.api, "GET", f"/api/devices/{int(i)}", admin_tokens.get())
+                       for i in args.devices.split(",")]
+        device_tokens.get()   # fail now, with a clear message, if the device credentials are wrong
+    except urllib.error.HTTPError as e:  # got an answer, but an error (unknown device, bad credentials, 403...)
+        sys.exit(f"HTTP {e.code} from {e.url}: {e.read().decode()[:200]}")
     except urllib.error.URLError as e:   # no answer at all
-        sys.exit(f"Could not reach the REST API at {args.api}: {e.reason}")
+        sys.exit(f"Could not reach {e.reason}; are api-service and Keycloak running?")
 
     options = []
     if args.keepalive:
@@ -299,7 +384,10 @@ def main():
         options += [("grpc.enable_retries", 1), ("grpc.service_config", RETRY_SERVICE_CONFIG)]
     else:
         options += [("grpc.enable_retries", 0)]
-    channel = grpc.insecure_channel(args.grpc, options=options)  # plaintext, no TLS (fine for local dev)
+    # Plaintext, no TLS: fine for local dev, but it means the token travels unencrypted. Anyone who can see
+    # the traffic could copy it and use it until it expires, so real deployments always put TLS in front.
+    channel = grpc.intercept_channel(grpc.insecure_channel(args.grpc, options=options),
+                                     BearerTokenInterceptor(device_tokens))
     stub = ingest_pb2_grpc.IngestServiceStub(channel)
 
     stop = threading.Event()
@@ -340,6 +428,7 @@ def main():
         print(f"Latency until acknowledged: median {q[49]:.1f} ms, p99 {q[98]:.1f} ms")
     if stats.stream_breaks:
         print("Streams broken: " + ", ".join(f"{k} {v}" for k, v in stats.stream_breaks.items()))
+    print(f"Device tokens fetched from Keycloak: {device_tokens.fetches}")
 
 
 if __name__ == "__main__":
