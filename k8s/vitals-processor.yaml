@@ -1,0 +1,62 @@
+# vitals-processor: consumes readings from Kafka into Postgres. It serves no API, so its Service only
+# exposes the actuator port inside the cluster (ClusterIP) for health checks and debugging.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vitals-processor
+spec:
+  selector:
+    app: vitals-processor
+  ports:
+    - name: http
+      port: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vitals-processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vitals-processor
+  template:
+    metadata:
+      labels:
+        app: vitals-processor
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: vitals-processor
+          image: vitalstream/vitals-processor:dev
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: db-credentials
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 250m
+            limits:
+              memory: 768Mi

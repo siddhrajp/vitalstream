@@ -141,9 +141,7 @@ public class IngestGrpcService extends IngestServiceGrpc.IngestServiceImplBase {
         if (request.hasMeasuredAt()) {
             Timestamp ts = request.getMeasuredAt();
             measuredAt = Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos());
-            if (measuredAt.isAfter(Instant.now())) {
-                throw invalid("measured_at must not be in the future");
-            }
+            // "Not in the future" is checked in ReadingService, the same rule as for REST.
         }
         UUID readingId = null;
         if (!request.getReadingId().isEmpty()) {   // proto3: an unset string reads as ""

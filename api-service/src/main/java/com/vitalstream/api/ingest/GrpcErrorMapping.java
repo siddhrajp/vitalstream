@@ -1,6 +1,7 @@
 package com.vitalstream.api.ingest;
 
 import com.vitalstream.api.common.ConflictException;
+import com.vitalstream.api.common.InvalidRequestException;
 import com.vitalstream.api.common.NotFoundException;
 import com.vitalstream.api.common.ServiceUnavailableException;
 import io.grpc.Status;
@@ -39,6 +40,7 @@ public class GrpcErrorMapping implements GrpcExceptionHandler {
             case StatusRuntimeException e -> e.getStatus();   // already a gRPC status (validation errors)
             case NotFoundException e -> Status.NOT_FOUND.withDescription(e.getMessage());
             case ConflictException e -> Status.FAILED_PRECONDITION.withDescription(e.getMessage());
+            case InvalidRequestException e -> Status.INVALID_ARGUMENT.withDescription(e.getMessage());
             case ServiceUnavailableException e -> Status.UNAVAILABLE.withDescription(e.getMessage());
             default -> null;
         };

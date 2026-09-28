@@ -121,6 +121,20 @@ class ApiServiceIntegrationTest {
     }
 
     @Test
+    void smallDeviceClockSkewIsToleratedButFarFutureIsRejected() throws Exception {
+        long deviceId = createDevice("SER-IT-CLOCK", createPatient("MRN-IT-CLOCK"));
+        String path = "/api/devices/" + deviceId + "/readings";
+        // A device whose clock runs 2 s fast: must be accepted (this used to fail ~5% of real readings).
+        mvc.perform(post(path).with(caller("service-account-test", "device")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"metric\":\"HEART_RATE\",\"value\":70,\"measuredAt\":\"" + java.time.Instant.now().plusSeconds(2) + "\"}"))
+                .andExpect(status().isAccepted());
+        // An hour ahead is a broken clock or bad data: rejected.
+        mvc.perform(post(path).with(caller("service-account-test", "device")).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"metric\":\"HEART_RATE\",\"value\":70,\"measuredAt\":\"" + java.time.Instant.now().plusSeconds(3600) + "\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void readingsFromUnknownDevicesAreRejected() throws Exception {
         mvc.perform(post("/api/devices/999999/readings").with(caller("service-account-test", "device"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"metric\":\"HEART_RATE\",\"value\":71}"))
