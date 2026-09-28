@@ -1,0 +1,86 @@
+# Continuous integration: build and test everything on every push and pull request.
+# Runs on GitHub's Linux machines ("runners"), which have Docker, so the Testcontainers integration tests
+# start real Postgres and Kafka containers there just as they do locally.
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch cancels the run still going for the previous push.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# The workflow only needs to read the code.
+permissions:
+  contents: read
+
+jobs:
+  java:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      # One job per service, run in parallel. fail-fast: false lets the others finish if one fails,
+      # so a single run shows every broken service.
+      fail-fast: false
+      matrix:
+        service: [api-service, vitals-processor, vitals-query]
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          # Keeps ~/.m2 between runs (keyed on the pom.xml files), so dependencies aren't
+          # downloaded again every time.
+          cache: maven
+
+      - name: Build and test
+        # verify = compile, run the tests (including Testcontainers), and package.
+        run: ./mvnw -B verify
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-${{ matrix.service }}
+          path: ${{ matrix.service }}/target/surefire-reports/
+          retention-days: 7
+
+  simulator:
+    name: simulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: simulator
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: simulator/requirements.txt
+
+      - name: Install dependencies
+        # generate.sh expects the packages in .venv, as in local development.
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+
+      - name: Generate gRPC code from the shared .proto
+        run: ./generate.sh
+
+      - name: Check the simulator loads
+        # Importing sim.py imports the generated code, so a .proto change that breaks the Python side fails here.
+        run: .venv/bin/python sim.py --help > /dev/null
