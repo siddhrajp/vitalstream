@@ -62,6 +62,7 @@ public class ReadingService {
                 .setValue(req.value())
                 .setMeasuredAt(measuredAt)
                 .setReceivedAt(now)
+                .setFirmwareVersion(device.getFirmwareVersion())
                 .build();
 
         // Key = device id: every reading from one device goes to the same partition, so they stay in order.

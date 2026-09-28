@@ -41,6 +41,12 @@
       "name": "receivedAt",
       "type": { "type": "long", "logicalType": "timestamp-millis" },
       "doc": "When the API accepted it"
+    },
+    {
+      "name": "firmwareVersion",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Device firmware when the reading was taken. Added in v2; optional with a default so readers and writers on v1 keep working"
     }
   ]
 }

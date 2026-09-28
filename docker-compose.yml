@@ -63,6 +63,9 @@ services:
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:19092
       SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 1   # single broker
+      # Check a new schema against ALL earlier versions, not just the latest: Kafka keeps old messages,
+      # and a consumer replaying from the start must be able to read every one of them.
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: backward_transitive
     depends_on:
       kafka:
         condition: service_healthy
