@@ -1,0 +1,16 @@
+-- For "what happened recently, across all devices" queries (e.g. an alerts panel: every heart rate
+-- above a threshold in the last few minutes). Without an index on time alone, Postgres read ~14,000
+-- pages (~110 MB) to find 40 matching rows among 5 million.
+--
+-- BRIN ("block range index") stores only the min and max measured_at for each range of 128 table pages,
+-- so it's tiny (40 kB here, vs 38 MB for an equivalent B-tree) and nearly free to maintain on insert.
+-- It works because readings are appended roughly in time order, so each block range covers a narrow
+-- time window and a "last 5 minutes" query can skip every range that ends earlier.
+-- Tested on 5M rows: 0.8 ms (BRIN) vs 0.25 ms (B-tree) vs 90-580 ms (no index).
+--
+-- Caveat: BRIN relies on that physical ordering. Readings that are stored long after they were measured
+-- (a consumer catching up on a backlog, a replay) widen the ranges and make the index less selective.
+--
+-- Note: plain CREATE INDEX blocks writes to the table while it builds (~2 s on 5M rows). On a large
+-- production table you'd use CREATE INDEX CONCURRENTLY, which Flyway must run outside a transaction.
+CREATE INDEX idx_vital_readings_measured_at_brin ON vital_readings USING brin (measured_at);
