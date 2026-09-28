@@ -95,6 +95,33 @@ services:
       schema-registry:
         condition: service_healthy
 
+  # Identity provider: users, roles and clients for OIDC login; issues signed JWT access tokens.
+  # Admin console: http://localhost:8180 (admin / admin). The "vitalstream" realm is imported from
+  # keycloak/realm-vitalstream.json on startup. Dev mode keeps its data inside the container, so the
+  # realm file is the source of truth: recreating the container resets Keycloak to it.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    container_name: vitalstream-keycloak
+    command: ["start-dev", "--import-realm"]
+    ports:
+      - "8180:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Tokens name their issuer ("iss" claim) from this URL, whichever address was used to fetch them,
+      # so services validating tokens can always expect http://localhost:8180/realms/vitalstream.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./keycloak/realm-vitalstream.json:/opt/keycloak/data/import/realm-vitalstream.json:ro
+    healthcheck:
+      # Health checks are served on the management port 9000; the image has no curl, so use bash /dev/tcp.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
 volumes:
   postgres-data:
   kafka-data:

@@ -1,0 +1,115 @@
+{
+  "realm": "vitalstream",
+  "displayName": "VitalStream",
+  "enabled": true,
+  "accessTokenLifespan": 300,
+  "sslRequired": "none",
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Manage patients and devices"
+      },
+      {
+        "name": "clinician",
+        "description": "View patients, devices and vitals"
+      },
+      {
+        "name": "device",
+        "description": "Send readings"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "vitalstream-cli",
+      "name": "VitalStream command line (local testing only)",
+      "description": "Public client for getting user tokens with curl (password grant). Local testing only.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience vitalstream-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "vitalstream-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "device-simulator",
+      "name": "Device simulator",
+      "description": "Confidential client for devices: client credentials grant, service account has the device role.",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "device-simulator-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "audience vitalstream-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "vitalstream-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "firstName": "Alice",
+      "lastName": "Clinician",
+      "email": "alice@vitalstream.local",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "clinician"
+      ]
+    },
+    {
+      "username": "bob",
+      "firstName": "Bob",
+      "lastName": "Admin",
+      "email": "bob@vitalstream.local",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "admin"
+      ]
+    },
+    {
+      "username": "service-account-device-simulator",
+      "enabled": true,
+      "serviceAccountClientId": "device-simulator",
+      "realmRoles": [
+        "device"
+      ]
+    }
+  ]
+}

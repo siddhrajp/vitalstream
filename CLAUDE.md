@@ -19,6 +19,6 @@ Java/Spring Boot, Kafka, Avro, gRPC, PostgreSQL/Flyway, CQRS, and Keycloak.
 2. Kafka producer/consumer  (done)
 3. Avro + Schema Registry  (done)
 4. gRPC ingest + Python simulator  (done)
-5. CQRS read models + query tuning  <- current
-6. Keycloak OIDC/JWT + role-based access
+5. CQRS read models + query tuning  (done)
+6. Keycloak OIDC/JWT + role-based access  <- current
 7. CI (GitHub Actions + Testcontainers) + Kubernetes
