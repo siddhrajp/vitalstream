@@ -60,7 +60,7 @@ public class SecurityConfig {
         return jwt -> new JwtAuthenticationToken(jwt, realmRoles(jwt), jwt.getClaimAsString("preferred_username"));
     }
 
-    static Collection<GrantedAuthority> realmRoles(Jwt jwt) {
+    public static Collection<GrantedAuthority> realmRoles(Jwt jwt) {
         Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
         if (realmAccess == null || !(realmAccess.get("roles") instanceof List<?> roles)) {
             return List.of();
