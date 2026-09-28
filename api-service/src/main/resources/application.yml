@@ -1,6 +1,18 @@
 spring:
   application:
     name: api-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Where tokens come from. On the first request Spring reads
+          # <issuer-uri>/.well-known/openid-configuration to find Keycloak's public keys (JWKS), caches
+          # them, and from then on checks each token's signature locally. A token is accepted only if
+          # its "iss" claim equals this URL and it hasn't expired.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/vitalstream}
+          # ...and only if its "aud" claim includes this: tokens issued for other applications in the
+          # same realm are rejected.
+          audiences: vitalstream-api
   grpc:
     server:
       port: 9090   # gRPC for devices; REST stays on 8080
