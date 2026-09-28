@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * gRPC version of POST /api/devices/{id}/readings. Both end up in the same ReadingService, so the device
@@ -125,7 +126,15 @@ public class IngestGrpcService extends IngestServiceGrpc.IngestServiceImplBase {
                 throw invalid("measured_at must not be in the future");
             }
         }
-        return new ReadingRequest(metric, request.getValue(), measuredAt);
+        UUID readingId = null;
+        if (!request.getReadingId().isEmpty()) {   // proto3: an unset string reads as ""
+            try {
+                readingId = UUID.fromString(request.getReadingId());
+            } catch (IllegalArgumentException e) {
+                throw invalid("reading_id must be a UUID");
+            }
+        }
+        return new ReadingRequest(metric, request.getValue(), measuredAt, readingId);
     }
 
     /** A StatusRuntimeException already carries its gRPC status, so it's sent to the client as-is. */

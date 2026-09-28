@@ -46,6 +46,10 @@ message SendReadingRequest {
   double value = 3;
   // When the device took the reading. Optional: the server uses its own clock if unset.
   google.protobuf.Timestamp measured_at = 4;
+  // Optional UUID chosen by the device, used as the event id. Send the same reading_id when retrying
+  // a reading whose outcome is unknown: the reading is then stored once however often it arrives.
+  // If unset, the server generates an id (and a retry would be stored as a separate reading).
+  string reading_id = 5;
 }
 
 message SendReadingResponse {

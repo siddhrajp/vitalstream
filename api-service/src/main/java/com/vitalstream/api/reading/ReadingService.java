@@ -55,7 +55,9 @@ public class ReadingService {
         // VitalReadingEvent is generated from schemas/avro/VitalReadingEvent.avsc. build() fails if a
         // field without a default is missing, so an incomplete event can't be sent.
         VitalReadingEvent event = VitalReadingEvent.newBuilder()
-                .setEventId(UUID.randomUUID().toString())
+                // The client's readingId if given, so a retried reading keeps the same event id and the
+                // processor's duplicate check (by event id) stores it only once.
+                .setEventId((req.readingId() != null ? req.readingId() : UUID.randomUUID()).toString())
                 .setDeviceId(deviceId)
                 .setPatientId(device.getPatient().getId())
                 .setMetric(com.vitalstream.events.Metric.valueOf(req.metric().name()))

@@ -8,6 +8,11 @@ spring:
       # Device streams never "finish" on their own, so without a limit a stopping server would keep
       # serving them indefinitely and a new version couldn't take over. Cancelled clients reconnect.
       shutdown-grace-period: 5s
+      keep-alive:
+        # Clients may send keepalive pings (to detect dead connections) at most this often. The default
+        # is 5 minutes; a client pinging more often gets disconnected with "too_many_pings". The simulator
+        # pings every 5s so the demo detects a hung server quickly; real devices would ping every minute or so.
+        permit-time: 4s
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5433/vitalstream}
     username: ${DB_USER:vitalstream}
